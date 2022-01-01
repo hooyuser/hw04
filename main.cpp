@@ -32,9 +32,9 @@ void init() {
     }
 }
 
-float G = 0.001;
-float eps = 0.001;
-float dt = 0.01;
+const float G = 0.001;
+const float eps = 0.001;
+const float dt = 0.01;
 
 void step() {
     for (int i = 0; i < STAR_NUM; i++) {
@@ -74,9 +74,9 @@ float calc() {
 
 template <class Func>
 long benchmark(Func const &func) {
-    auto t0 = std::chrono::steady_clock::now();
+    auto t0 = std::chrono::high_resolution_clock::now();
     func();
-    auto t1 = std::chrono::steady_clock::now();
+    auto t1 = std::chrono::high_resolution_clock::now();
     auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
     return dt.count();
 }
@@ -84,11 +84,13 @@ long benchmark(Func const &func) {
 int main() {
     init();
     printf("Initial energy: %f\n", calc());  // Initial energy: -8.571527
-    auto dt = benchmark([&] {
+    /*auto dt = benchmark([&] {
         for (int i = 0; i < 100000; i++)
             step();
-    });
+    });*/
+    for (int i = 0; i < 100000; i++)
+        step();
     printf("Final energy: %f\n", calc());  // Final energy: -8.511734
-    printf("Time elapsed: %ld ms\n", dt);
+    //printf("Time elapsed: %ld ms\n", dt);
     return 0;
 }
