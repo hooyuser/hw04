@@ -84,13 +84,12 @@ long benchmark(Func const &func) {
 int main() {
     init();
     printf("Initial energy: %f\n", calc());  // Initial energy: -8.571527
-    /*auto dt = benchmark([&] {
+    auto dt = benchmark([&] {
         for (int i = 0; i < 100000; i++)
             step();
-    });*/
-    for (int i = 0; i < 100000; i++)
-        step();
+        });
     printf("Final energy: %f\n", calc());  // Final energy: -8.511734
-    //printf("Time elapsed: %ld ms\n", dt);
+    printf("Time elapsed: %ld ms\n", dt);
+    system("pause");
     return 0;
 }
