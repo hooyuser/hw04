@@ -4,25 +4,31 @@
 #include <chrono>
 #include <cmath>
 
+const size_t STAR_NUM = 48;
+
 float frand() {
     return (float)rand() / RAND_MAX * 2 - 1;
 }
 
-struct Star {
-    float px, py, pz;
-    float vx, vy, vz;
-    float mass;
-};
 
-std::vector<Star> stars;
+float px[STAR_NUM], py[STAR_NUM], pz[STAR_NUM];
+float vx[STAR_NUM], vy[STAR_NUM], vz[STAR_NUM];
+float mass[STAR_NUM];
+
+
+
+
+//Star<STAR_NUM> stars;
 
 void init() {
-    for (int i = 0; i < 48; i++) {
-        stars.push_back({
-            frand(), frand(), frand(),
-            frand(), frand(), frand(),
-            frand() + 1,
-        });
+    for (int i = 0; i < STAR_NUM; i++) {
+        px[i] = frand();
+        py[i] = frand();
+        pz[i] = frand();
+        vx[i] = frand();
+        vy[i] = frand();
+        vz[i] = frand();
+        mass[i] = frand() + 1;
     }
 }
 
@@ -31,36 +37,36 @@ float eps = 0.001;
 float dt = 0.01;
 
 void step() {
-    for (auto &star: stars) {
-        for (auto &other: stars) {
-            float dx = other.px - star.px;
-            float dy = other.py - star.py;
-            float dz = other.pz - star.pz;
+    for (int i = 0; i < STAR_NUM; i++) {
+        for (int j = 0; j < STAR_NUM; j++) {
+            float dx = px[j] - px[i];
+            float dy = py[j] - py[i];
+            float dz = pz[j] - pz[i];
             float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
             d2 *= sqrt(d2);
-            star.vx += dx * other.mass * G * dt / d2;
-            star.vy += dy * other.mass * G * dt / d2;
-            star.vz += dz * other.mass * G * dt / d2;
+            vx[i] += dx * mass[j] * G * dt / d2;
+            vy[i] += dy * mass[j] * G * dt / d2;
+            vz[i] += dz * mass[j] * G * dt / d2;
         }
     }
-    for (auto &star: stars) {
-        star.px += star.vx * dt;
-        star.py += star.vy * dt;
-        star.pz += star.vz * dt;
+    for (int i = 0; i < STAR_NUM; i++) {
+        px[i] += vx[i] * dt;
+        py[i] += vy[i] * dt;
+        pz[i] += vz[i] * dt;
     }
 }
 
 float calc() {
     float energy = 0;
-    for (auto &star: stars) {
-        float v2 = star.vx * star.vx + star.vy * star.vy + star.vz * star.vz;
-        energy += star.mass * v2 / 2;
-        for (auto &other: stars) {
-            float dx = other.px - star.px;
-            float dy = other.py - star.py;
-            float dz = other.pz - star.pz;
+    for (int i = 0; i < STAR_NUM; i++) {
+        float v2 = vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i];
+        energy += mass[i] * v2 / 2;
+        for (int j = 0; j < STAR_NUM; j++) {
+            float dx = px[j] - px[i];
+            float dy = py[j] - py[i];
+            float dz = pz[j] - pz[i];
             float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
-            energy -= other.mass * star.mass * G / sqrt(d2) / 2;
+            energy -= mass[j] * mass[i] * G / sqrt(d2) / 2;
         }
     }
     return energy;
