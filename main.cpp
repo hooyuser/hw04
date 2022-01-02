@@ -63,10 +63,13 @@ const float G = 0.001;
 const float eps = 0.001;
 const float dt = 0.01;
 
-const __m256 eps2 = _mm256_set1_ps(eps * eps);
+
 const float G_dt = G * dt;
 
 void step() {
+	const __m256 eps2 = _mm256_set1_ps(eps * eps);
+	const __m256 dt_vec = _mm256_set1_ps(dt);
+
 	__m256 dvx, dvy, dvz;
 
 	for (size_t i = 0; i < STAR_NUM; i++) {
@@ -112,10 +115,27 @@ void step() {
 		vz[i] += sum8(dvz) * G_dt;
 	}
 
-	for (size_t i = 0; i < STAR_NUM; i++) {
-		px[i] += vx[i] * dt;
-		py[i] += vy[i] * dt;
-		pz[i] += vz[i] * dt;
+	//for (size_t i = 0; i < STAR_NUM; i++) {
+	//	px[i] += vx[i] * dt;
+	//	py[i] += vy[i] * dt;
+	//	pz[i] += vz[i] * dt;
+	//}
+
+	for (size_t i = 0; i < STAR_NUM; i += 8) {
+		__m256 px_j = _mm256_load_ps(&px[i]);
+		__m256 py_j = _mm256_load_ps(&py[i]);
+		__m256 pz_j = _mm256_load_ps(&pz[i]);
+
+		__m256 vx_j = _mm256_load_ps(&vx[i]);
+		__m256 vy_j = _mm256_load_ps(&vy[i]);
+		__m256 vz_j = _mm256_load_ps(&vz[i]);
+
+		_mm256_store_ps(&px[i], _mm256_fmadd_ps(vx_j, dt_vec, px_j));
+		_mm256_store_ps(&py[i], _mm256_fmadd_ps(vy_j, dt_vec, py_j));
+		_mm256_store_ps(&pz[i], _mm256_fmadd_ps(vz_j, dt_vec, pz_j));
+		//px[i] += vx[i] * dt;
+		//py[i] += vy[i] * dt;
+		//pz[i] += vz[i] * dt;
 	}
 }
 
@@ -148,7 +168,7 @@ int main() {
 	init();
 	printf("Initial energy: %f\n", calc());  // Initial energy: -8.571527
 	auto dt = benchmark([&] {
-		for (size_t i = 0; i < 100000; i++)
+		for (size_t i = 0; i < 1000000; i++)
 			step();
 		});
 	printf("Final energy: %f\n", calc());  // Final energy: -8.511734
