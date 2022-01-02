@@ -170,7 +170,7 @@ float calc() {
 }
 
 template <class Func>
-long benchmark(Func const& func) {
+long long benchmark(Func const& func) {
 	auto t0 = std::chrono::high_resolution_clock::now();
 	func();
 	auto t1 = std::chrono::high_resolution_clock::now();
@@ -186,7 +186,7 @@ int main() {
 			step();
 		});
 	printf("Final energy: %f\n", calc());  // Final energy: -8.562095
-	printf("Time elapsed: %ld ms\n", dt);  // 70ms
+	printf("Time elapsed: %lld ms\n", dt);  // 70ms
 	//system("pause");
 	return 0;
 }
