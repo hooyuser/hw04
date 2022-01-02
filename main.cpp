@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <immintrin.h>
+#include <utility>
 
 const size_t STAR_NUM = 48;
 
@@ -61,9 +62,23 @@ void init() {
 	}
 }
 
+template<class Fn, size_t... M>
+static void unroll_impl(Fn fn, size_t L, std::integer_sequence<size_t, M...> iter) {
+	constexpr auto S = sizeof...(M);
+	for (size_t i = 0; i < L; i++) {
+		((fn(M + i * S)), ...);
+	}
+}
+
+template<size_t N, size_t S = N, class Fn>
+constexpr static void UNROLL(Fn fn) {
+	static_assert(N % S == 0);
+	unroll_impl(fn, N / S, std::make_index_sequence<S>());
+}
+
 void step() {
-	const alignas(32) __m256 eps2 = _mm256_set1_ps(eps * eps);
-	const alignas(32) __m256 dt_vec = _mm256_set1_ps(dt);
+	const __m256 eps2 = _mm256_set1_ps(eps * eps);
+	const __m256 dt_vec = _mm256_set1_ps(dt);
 
 	for (size_t i = 0; i < STAR_NUM; i++) {
 		__m256 px_i = _mm256_broadcast_ss(&px[i]);
@@ -73,9 +88,9 @@ void step() {
 		__m256 d_vx = _mm256_setzero_ps();
 		__m256 d_vy = _mm256_setzero_ps();
 		__m256 d_vz = _mm256_setzero_ps();
-
-#pragma unroll 6
-		for (size_t j = 0; j < STAR_NUM; j += 8) {
+		
+		UNROLL<6>([&](size_t iter) {  //unroll size: 6/3/2
+			const size_t j = iter * 8;
 			__m256 px_j = _mm256_load_ps(&px[j]);
 			__m256 dx = _mm256_sub_ps(px_j, px_i);
 
@@ -109,7 +124,8 @@ void step() {
 			//d_vx += dx * factor;
 			//d_vy += dy * factor; 
 			//d_vz += dz * factor; 
-		}
+		});
+
 		vx[i] += reduce256_add_ps(d_vx) * G_dt;
 		vy[i] += reduce256_add_ps(d_vy) * G_dt;
 		vz[i] += reduce256_add_ps(d_vz) * G_dt;

@@ -7,7 +7,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 if (MSVC)
-    add_compile_options(/fp:fast /O2 /Oi /Ot /Oy /GT /GL)
+    add_compile_options(/fp:fast /Oi /Ot /Oy /GT /GL /FAs)
 endif()
 
 add_executable(main main.cpp)
