@@ -77,7 +77,6 @@ void step() {
 		__m256 py_i = _mm256_broadcast_ss(&py[i]);
 		__m256 pz_i = _mm256_broadcast_ss(&pz[i]);
 
-
 		dvx = _mm256_xor_ps(dvx, dvx);//ax=(0,0,0,0,0,0,0,0)
 		dvy = _mm256_xor_ps(dvy, dvy);
 		dvz = _mm256_xor_ps(dvz, dvz);
@@ -114,12 +113,6 @@ void step() {
 		vy[i] += sum8(dvy) * G_dt;
 		vz[i] += sum8(dvz) * G_dt;
 	}
-
-	//for (size_t i = 0; i < STAR_NUM; i++) {
-	//	px[i] += vx[i] * dt;
-	//	py[i] += vy[i] * dt;
-	//	pz[i] += vz[i] * dt;
-	//}
 
 	for (size_t i = 0; i < STAR_NUM; i += 8) {
 		__m256 px_j = _mm256_load_ps(&px[i]);
