@@ -103,7 +103,7 @@ void step() {
 			__m256 inverse_sqrt3 = _mm256_mul_ps(inverse_sqrt2, inverse_sqrt);//r2*r2*r2
 			//d2 *= sqrt(d2);
 
-			__m256 mass_j = _mm256_broadcast_ss(&mass[j]);
+			__m256 mass_j = _mm256_load_ps(&mass[j]);
 			__m256 factor = _mm256_mul_ps(inverse_sqrt3, mass_j);
 
 			dvx = _mm256_fmadd_ps(dx, factor, dvx);
