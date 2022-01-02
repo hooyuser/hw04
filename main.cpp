@@ -64,6 +64,7 @@ const float eps = 0.001;
 const float dt = 0.01;
 
 const __m256 eps2 = _mm256_set1_ps(eps * eps);
+const __m512 dt_vec = _mm512_set1_ps(dt);
 const float G_dt = G * dt;
 
 void step() {
@@ -94,7 +95,7 @@ void step() {
 			prod = _mm256_fmadd_ps(dy, dy, prod);
 			prod = _mm256_fmadd_ps(dz, dz, prod);
 			prod = _mm256_add_ps(eps2, prod);
-			//float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
+			//float prod = dx * dx + dy * dy + dz * dz + eps * eps;
 			__m256 inverse_sqrt = _mm256_rsqrt_ps(prod);
 			__m256 inverse_sqrt2 = _mm256_mul_ps(inverse_sqrt, inverse_sqrt);
 			__m256 inverse_sqrt3 = _mm256_mul_ps(inverse_sqrt2, inverse_sqrt);//r2*r2*r2
@@ -112,10 +113,21 @@ void step() {
 		vz[i] += sum8(dvz) * G_dt;
 	}
 
-	for (size_t i = 0; i < STAR_NUM; i++) {
-		px[i] += vx[i] * dt;
-		py[i] += vy[i] * dt;
-		pz[i] += vz[i] * dt;
+	for (size_t i = 0; i < STAR_NUM; i += 16) {
+		__m512 px_j = _mm512_load_ps(&px[i]);
+		__m512 py_j = _mm512_load_ps(&py[i]);
+		__m512 pz_j = _mm512_load_ps(&pz[i]);
+
+		__m512 vx_j = _mm512_load_ps(&vx[i]);
+		__m512 vy_j = _mm512_load_ps(&vy[i]);
+		__m512 vz_j = _mm512_load_ps(&vz[i]);
+
+		_mm512_store_ps(&px[i], _mm512_fmadd_ps(vx_j, dt_vec, px_j));
+		_mm512_store_ps(&py[i], _mm512_fmadd_ps(vy_j, dt_vec, py_j));
+		_mm512_store_ps(&pz[i], _mm512_fmadd_ps(vz_j, dt_vec, pz_j));
+		//px[i] += vx[i] * dt;
+		//py[i] += vy[i] * dt;
+		//pz[i] += vz[i] * dt;
 	}
 }
 
