@@ -12,7 +12,7 @@ float frand() {
 }
 
 //x = ( x7, x6, x5, x4, x3, x2, x1, x0 )
-float sum8(__m512 zmm) {
+float sum16(__m512 zmm) {
 	__m256 high = _mm512_extractf32x8_ps(zmm, 1);
 	__m256 low = _mm512_castps512_ps256(zmm);
 	__m256 sumOct = _mm256_add_ps(low, high);
@@ -111,9 +111,12 @@ void step() {
 			dvy = _mm512_fmadd_ps(dy, factor, dvy);
 			dvz = _mm512_fmadd_ps(dz, factor, dvz);
 		}
-		vx[i] += sum8(dvx) * G_dt;
-		vy[i] += sum8(dvy) * G_dt;
-		vz[i] += sum8(dvz) * G_dt;
+		vx[i] += sum16(dvx) * G_dt;
+		vy[i] += sum16(dvy) * G_dt;
+		vz[i] += sum16(dvz) * G_dt;
+		//vx[i] += _mm512_reduce_add_ps(dvx) * G_dt;
+		//vy[i] += _mm512_reduce_add_ps(dvy) * G_dt;
+		//vz[i] += _mm512_reduce_add_ps(dvz) * G_dt;
 	}
 
 	for (size_t i = 0; i < STAR_NUM; i += 16) {
