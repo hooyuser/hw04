@@ -1,6 +1,5 @@
 #include <cstdio>
 #include <cstdlib>
-#include <vector>
 #include <chrono>
 #include <cmath>
 #include <immintrin.h>
@@ -12,13 +11,13 @@ const float eps = 0.001;
 const float dt = 0.01;
 const float G_dt = G * dt;
 
-alignas(4) float px[STAR_NUM];
-alignas(4) float py[STAR_NUM];
-alignas(4) float pz[STAR_NUM];
-alignas(4) float vx[STAR_NUM];
-alignas(4) float vy[STAR_NUM];
-alignas(4) float vz[STAR_NUM];
-alignas(4) float mass[STAR_NUM];
+alignas(32) float px[STAR_NUM];
+alignas(32) float py[STAR_NUM];
+alignas(32) float pz[STAR_NUM];
+alignas(32) float vx[STAR_NUM];
+alignas(32) float vy[STAR_NUM];
+alignas(32) float vz[STAR_NUM];
+alignas(32) float mass[STAR_NUM];
 
 float frand() {
 	return (float)rand() / RAND_MAX * 2 - 1;
@@ -63,8 +62,8 @@ void init() {
 }
 
 void step() {
-	const __m256 eps2 = _mm256_set1_ps(eps * eps);
-	const __m256 dt_vec = _mm256_set1_ps(dt);
+	const alignas(32) __m256 eps2 = _mm256_set1_ps(eps * eps);
+	const alignas(32) __m256 dt_vec = _mm256_set1_ps(dt);
 
 	for (size_t i = 0; i < STAR_NUM; i++) {
 		__m256 px_i = _mm256_broadcast_ss(&px[i]);
