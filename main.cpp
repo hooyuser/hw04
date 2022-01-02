@@ -34,6 +34,18 @@ float sum8(__m256 x) {
 	return _mm_cvtss_f32(sum);
 }
 
+
+float reduce256_add_ps(__m256 v) {
+	__m128 vlow = _mm256_castps256_ps128(v);
+	__m128 vhigh = _mm256_extractf128_ps(v, 1); // high 128
+	vlow = _mm_add_ps(vlow, vhigh);     // add the low 128
+	__m128 shuf = _mm_movehdup_ps(vlow);        // broadcast elements 3,1 to 2,0
+	__m128 sums = _mm_add_ps(vlow, shuf);
+	shuf = _mm_movehl_ps(shuf, sums); // high half -> low half
+	sums = _mm_add_ss(sums, shuf);
+	return _mm_cvtss_f32(sums);
+}
+
 alignas(4) float px[STAR_NUM];
 alignas(4) float py[STAR_NUM];
 alignas(4) float pz[STAR_NUM];
@@ -83,11 +95,12 @@ void step() {
 
 		for (size_t j = 0; j < STAR_NUM; j += 8) {
 			__m256 px_j = _mm256_load_ps(&px[j]);
-			__m256 py_j = _mm256_load_ps(&py[j]);
-			__m256 pz_j = _mm256_load_ps(&pz[j]);
-
 			__m256 dx = _mm256_sub_ps(px_j, px_i);
+
+			__m256 py_j = _mm256_load_ps(&py[j]);
 			__m256 dy = _mm256_sub_ps(py_j, py_i);
+
+			__m256 pz_j = _mm256_load_ps(&pz[j]);
 			__m256 dz = _mm256_sub_ps(pz_j, pz_i);
 			//float dx = px[j] - px[i];
 			//float dy = py[j] - py[i];
@@ -99,11 +112,11 @@ void step() {
 			//float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
 			__m256 inverse_sqrt = _mm256_rsqrt_ps(prod);
 			__m256 inverse_sqrt2 = _mm256_mul_ps(inverse_sqrt, inverse_sqrt);
-			__m256 inverse_sqrt3 = _mm256_mul_ps(inverse_sqrt2, inverse_sqrt);//r2*r2*r2
+			inverse_sqrt = _mm256_mul_ps(inverse_sqrt2, inverse_sqrt);//r2*r2*r2
 			//d2 *= sqrt(d2);
 
 			__m256 mass_j = _mm256_load_ps(&mass[j]);
-			__m256 factor = _mm256_mul_ps(inverse_sqrt3, mass_j);
+			__m256 factor = _mm256_mul_ps(inverse_sqrt, mass_j);
 
 			dvx = _mm256_fmadd_ps(dx, factor, dvx);
 			dvy = _mm256_fmadd_ps(dy, factor, dvy);
@@ -113,7 +126,11 @@ void step() {
 		vy[i] += sum8(dvy) * G_dt;
 		vz[i] += sum8(dvz) * G_dt;
 	}
-
+	//for (size_t i = 0; i < STAR_NUM; i++) {
+	//	px[i] += vx[i] * dt;
+	//	py[i] += vy[i] * dt;
+	//	pz[i] += vz[i] * dt;
+	//}
 	for (size_t i = 0; i < STAR_NUM; i += 8) {
 		__m256 px_j = _mm256_load_ps(&px[i]);
 		__m256 py_j = _mm256_load_ps(&py[i]);
