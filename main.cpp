@@ -36,18 +36,29 @@ const float G = 0.001;
 const float eps = 0.001;
 const float dt = 0.01;
 
+const float eps2 = eps * eps;
+const float G_dt = G * dt;
+
 void step() {
     for (int i = 0; i < STAR_NUM; i++) {
+        float d_vx = 0.0f;
+        float d_vy = 0.0f;
+        float d_vz = 0.0f;
         for (int j = 0; j < STAR_NUM; j++) {
             float dx = px[j] - px[i];
             float dy = py[j] - py[i];
             float dz = pz[j] - pz[i];
             float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
             d2 *= sqrt(d2);
-            vx[i] += dx * mass[j] * G * dt / d2;
-            vy[i] += dy * mass[j] * G * dt / d2;
-            vz[i] += dz * mass[j] * G * dt / d2;
+            //float d2inv = 1.f / sqrt(d2);
+            //d2 = d2inv * d2inv * d2inv;
+            d_vx += dx * mass[j] / d2;
+            d_vy += dy * mass[j] / d2;
+            d_vz += dz * mass[j] / d2;
         }
+        vx[i] += d_vx * G * dt;
+        vy[i] += d_vy * G * dt;
+        vz[i] += d_vz * G * dt;
     }
     for (int i = 0; i < STAR_NUM; i++) {
         px[i] += vx[i] * dt;
