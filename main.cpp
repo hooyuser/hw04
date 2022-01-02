@@ -83,6 +83,6 @@ int main() {
             step();
     });
     printf("Final energy: %f\n", calc());  // Final energy: -8.511734
-    printf("Time elapsed: %ld ms\n", dt);
+    printf("Time elapsed: %ld ms\n", dt);  //847ms
     return 0;
 }
