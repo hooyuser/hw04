@@ -104,7 +104,7 @@ void step() {
 			__m512 inverse_sqrt3 = _mm512_mul_ps(inverse_sqrt2, inverse_sqrt);//r2*r2*r2
 			//d2 *= sqrt(d2);
 
-			__m512 mass_j = _mm512_set1_ps(mass[j]);
+			__m512 mass_j = _mm512_load_ps(&mass[j]);
 			__m512 factor = _mm512_mul_ps(inverse_sqrt3, mass_j);
 
 			dvx = _mm512_fmadd_ps(dx, factor, dvx);
