@@ -20,7 +20,7 @@ alignas(32) float vy[STAR_NUM];
 alignas(32) float vz[STAR_NUM];
 alignas(32) float mass[STAR_NUM];
 
-float frand() {
+static float frand() {
 	return (float)rand() / RAND_MAX * 2 - 1;
 }
 
@@ -70,7 +70,7 @@ static void unroll_impl(Fn fn, size_t L, std::integer_sequence<size_t, M...> ite
 	}
 }
 
-template<size_t N, size_t S = N, class Fn>
+template<size_t N, size_t S = N, class Fn>   // N: total iterations, S = iterations per loop. S==N implies unrolling completely
 constexpr static void UNROLL(Fn fn) {
 	static_assert(N % S == 0);
 	unroll_impl(fn, N / S, std::make_index_sequence<S>());
@@ -88,8 +88,8 @@ void step() {
 		__m256 d_vx = _mm256_setzero_ps();
 		__m256 d_vy = _mm256_setzero_ps();
 		__m256 d_vz = _mm256_setzero_ps();
-		
-		UNROLL<6>([&](size_t iter) {  //unroll size: 6/3/2
+
+		UNROLL<6, 6>([&](size_t iter) {  //unroll size: 6/3/2/1
 			const size_t j = iter * 8;
 			__m256 px_j = _mm256_load_ps(&px[j]);
 			__m256 dx = _mm256_sub_ps(px_j, px_i);
@@ -124,7 +124,7 @@ void step() {
 			//d_vx += dx * factor;
 			//d_vy += dy * factor; 
 			//d_vz += dz * factor; 
-		});
+			});
 
 		vx[i] += reduce256_add_ps(d_vx) * G_dt;
 		vy[i] += reduce256_add_ps(d_vy) * G_dt;
@@ -135,7 +135,9 @@ void step() {
 	//	py[i] += vy[i] * dt;
 	//	pz[i] += vz[i] * dt;
 	//}
-	for (size_t i = 0; i < STAR_NUM; i += 8) {
+
+	UNROLL<6, 2>([&](size_t iter) {   //unroll size: 6/3/2/1
+		const size_t i = iter * 8;
 		__m256 px_i = _mm256_load_ps(&px[i]);
 		__m256 vx_i = _mm256_load_ps(&vx[i]);
 		_mm256_store_ps(&px[i], _mm256_fmadd_ps(vx_i, dt_vec, px_i));
@@ -150,7 +152,7 @@ void step() {
 		//px[i] += vx[i] * dt;
 		//py[i] += vy[i] * dt;
 		//pz[i] += vz[i] * dt;
-	}
+		});
 }
 
 float calc() {
@@ -186,7 +188,7 @@ int main() {
 			step();
 		});
 	printf("Final energy: %f\n", calc());  // Final energy: -8.562095
-	printf("Time elapsed: %lld ms\n", dt);  // 70ms
+	printf("Time elapsed: %lld ms\n", dt);
 	//system("pause");
 	return 0;
 }
