@@ -99,6 +99,6 @@ int main() {
         });
     printf("Final energy: %f\n", calc());  // Final energy: -8.511734
     printf("Time elapsed: %ld ms\n", dt);
-    system("pause");
+    //system("pause");
     return 0;
 }
