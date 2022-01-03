@@ -16,8 +16,6 @@ float vx[STAR_NUM], vy[STAR_NUM], vz[STAR_NUM];
 float mass[STAR_NUM];
 
 
-
-
 //Star<STAR_NUM> stars;
 
 void init() {
