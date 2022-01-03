@@ -6,38 +6,42 @@
 #include <utility>
 
 const size_t STAR_NUM = 48;
-constexpr size_t STAR_8_NUM = (STAR_NUM + 7) / 8;
+constexpr size_t SIMD_WIDTH = 16;  //16 floats
+constexpr size_t STAR_16_NUM = (STAR_NUM + SIMD_WIDTH - 1) / SIMD_WIDTH;
 
 const float G = 0.001;
 const float eps = 0.001;
 const float dt = 0.01;
 const float G_dt = G * dt;
 
-const __m256 eps2 = _mm256_set1_ps(eps * eps);
-const __m256 half_G = _mm256_set1_ps(0.5 * G);
+const __m512 eps2 = _mm512_set1_ps(eps * eps);
+const __m512 half_G = _mm512_set1_ps(0.5 * G);
 
-struct Star_8 {
-	alignas(32) __m256 px;
-	alignas(32) __m256 py;
-	alignas(32) __m256 pz;
-	alignas(32) __m256 mass;
-	alignas(32) __m256 vx;
-	alignas(32) __m256 vy;
-	alignas(32) __m256 vz;
+struct Star_16 {
+	alignas(64) __m512 px;
+	alignas(64) __m512 py;
+	alignas(64) __m512 pz;
+	alignas(64) __m512 mass;
+	alignas(64) __m512 vx;
+	alignas(64) __m512 vy;
+	alignas(64) __m512 vz;
 };
 
-Star_8 stars[STAR_8_NUM];
+Star_16 stars[STAR_16_NUM];
 
 static float frand() {
 	return (float)rand() / RAND_MAX * 2 - 1;
 }
 
-static float reduce256_add_ps(__m256 ymm) {  // ymm = ( x7, x6, x5, x4, x3, x2, x1, x0 )
+static float reduce512_add_ps(__m512 zmm) {
+	__m256 high = _mm512_extractf32x8_ps(zmm, 1);
+	__m256 low = _mm512_castps512_ps256(zmm);
+	__m256 sumOct = _mm256_add_ps(low, high);
 
-	__m128 vlow = _mm256_castps256_ps128(ymm);
+	__m128 vlow = _mm256_castps256_ps128(sumOct);
 	// vlow = ( x3, x2, x1, x0 )
 
-	__m128 vhigh = _mm256_extractf128_ps(ymm, 1);
+	__m128 vhigh = _mm256_extractf128_ps(sumOct, 1);
 	// vhigh = ( x7, x6, x5, x4 )
 
 	vlow = _mm_add_ps(vlow, vhigh);
@@ -59,15 +63,15 @@ static float reduce256_add_ps(__m256 ymm) {  // ymm = ( x7, x6, x5, x4, x3, x2, 
 }
 
 void init() {
-	for (int i = 0; i < STAR_8_NUM; i++) {
-		for (int j = 0; j < 8; j++) {
-			stars[i].px.m256_f32[j] = frand();
-			stars[i].py.m256_f32[j] = frand();
-			stars[i].pz.m256_f32[j] = frand();
-			stars[i].vx.m256_f32[j] = frand();
-			stars[i].vy.m256_f32[j] = frand();
-			stars[i].vz.m256_f32[j] = frand();
-			stars[i].mass.m256_f32[j] = frand() + 1;
+	for (int i = 0; i < STAR_16_NUM; i++) {
+		for (int j = 0; j < SIMD_WIDTH; j++) {
+			stars[i].px.m512_f32[j] = frand();
+			stars[i].py.m512_f32[j] = frand();
+			stars[i].pz.m512_f32[j] = frand();
+			stars[i].vx.m512_f32[j] = frand();
+			stars[i].vy.m512_f32[j] = frand();
+			stars[i].vz.m512_f32[j] = frand();
+			stars[i].mass.m512_f32[j] = frand() + 1;
 		}
 	}
 }
@@ -88,57 +92,57 @@ constexpr static void UNROLL(Fn fn) {
 
 void step() {
 	
-	const __m256 dt_vec = _mm256_set1_ps(dt);
+	const __m512 dt_vec = _mm512_set1_ps(dt);
 
-	for (size_t i = 0; i < STAR_8_NUM; i++) {
+	for (size_t i = 0; i < STAR_16_NUM; i++) {
 		auto& star_i = stars[i];
 		for (size_t k = 0; k < 8; k++) {
-			__m256 px_ik = _mm256_broadcast_ss(&star_i.px.m256_f32[k]);
-			__m256 py_ik = _mm256_broadcast_ss(&star_i.py.m256_f32[k]);
-			__m256 pz_ik = _mm256_broadcast_ss(&star_i.pz.m256_f32[k]);
+			__m512 px_ik = _mm512_set1_ps(star_i.px.m512_f32[k]);
+			__m512 py_ik = _mm512_set1_ps(star_i.py.m512_f32[k]);
+			__m512 pz_ik = _mm512_set1_ps(star_i.pz.m512_f32[k]);
 
-			__m256 d_vx = _mm256_setzero_ps();
-			__m256 d_vy = _mm256_setzero_ps();
-			__m256 d_vz = _mm256_setzero_ps();
+			__m512 d_vx = _mm512_setzero_ps();
+			__m512 d_vy = _mm512_setzero_ps();
+			__m512 d_vz = _mm512_setzero_ps();
 
-			UNROLL<STAR_8_NUM, 6>([&](size_t j) {  //unroll size: 6/3/2/1
-				__m256 dx = _mm256_sub_ps(stars[j].px, px_ik);
+			UNROLL<STAR_16_NUM>([&](size_t j) {  //unroll size: 6/3/2/1
+				__m512 dx = _mm512_sub_ps(stars[j].px, px_ik);
 
 				//__m256 py_j = _mm256_load_ps(&py[j]);
-				__m256 dy = _mm256_sub_ps(stars[j].py, py_ik);
+				__m512 dy = _mm512_sub_ps(stars[j].py, py_ik);
 
 				//__m256 pz_j = _mm256_load_ps(&pz[j]);
-				__m256 dz = _mm256_sub_ps(stars[j].pz, pz_ik);
+				__m512 dz = _mm512_sub_ps(stars[j].pz, pz_ik);
 				//float dx = px[j] - px[i];
 				//float dy = py[j] - py[i];
 				//float dz = pz[j] - pz[i];
 
-				__m256 prod = _mm256_mul_ps(dx, dx);
-				prod = _mm256_fmadd_ps(dy, dy, prod);
-				prod = _mm256_fmadd_ps(dz, dz, prod);
-				prod = _mm256_add_ps(eps2, prod);
+				__m512 prod = _mm512_mul_ps(dx, dx);
+				prod = _mm512_fmadd_ps(dy, dy, prod);
+				prod = _mm512_fmadd_ps(dz, dz, prod);
+				prod = _mm512_add_ps(eps2, prod);
 				//float prod = dx * dx + dy * dy + dz * dz + eps * eps;
 
-				__m256 inverse_sqrt = _mm256_rsqrt_ps(prod);
-				__m256 inverse_sqrt2 = _mm256_mul_ps(inverse_sqrt, inverse_sqrt);
-				inverse_sqrt = _mm256_mul_ps(inverse_sqrt2, inverse_sqrt);
+				__m512 inverse_sqrt = _mm512_invsqrt_ps(prod);
+				__m512 inverse_sqrt2 = _mm512_mul_ps(inverse_sqrt, inverse_sqrt);
+				inverse_sqrt = _mm512_mul_ps(inverse_sqrt2, inverse_sqrt);
 				//float inverse_sqrt = 1 / sqrt(prod)^3;
 
 				//__m256 mass_j = _mm256_load_ps(&mass[j]);
-				__m256 factor = _mm256_mul_ps(inverse_sqrt, stars[j].mass);
+				__m512 factor = _mm512_mul_ps(inverse_sqrt, stars[j].mass);
 				//float factor = mass[j] / sqrt(prod)^3;
 
-				d_vx = _mm256_fmadd_ps(dx, factor, d_vx);
-				d_vy = _mm256_fmadd_ps(dy, factor, d_vy);
-				d_vz = _mm256_fmadd_ps(dz, factor, d_vz);
+				d_vx = _mm512_fmadd_ps(dx, factor, d_vx);
+				d_vy = _mm512_fmadd_ps(dy, factor, d_vy);
+				d_vz = _mm512_fmadd_ps(dz, factor, d_vz);
 				//d_vx += dx * factor;
 				//d_vy += dy * factor; 
 				//d_vz += dz * factor; 
 				});
 
-			star_i.vx.m256_f32[k] += reduce256_add_ps(d_vx) * G_dt;
-			star_i.vy.m256_f32[k] += reduce256_add_ps(d_vy) * G_dt;
-			star_i.vz.m256_f32[k] += reduce256_add_ps(d_vz) * G_dt;
+			star_i.vx.m512_f32[k] += reduce512_add_ps(d_vx) * G_dt;
+			star_i.vy.m512_f32[k] += reduce512_add_ps(d_vy) * G_dt;
+			star_i.vz.m512_f32[k] += reduce512_add_ps(d_vz) * G_dt;
 		}
 	}
 	//for (size_t i = 0; i < STAR_NUM; i++) {
@@ -147,19 +151,19 @@ void step() {
 	//	pz[i] += vz[i] * dt;
 	//}
 
-	UNROLL<STAR_8_NUM, 6>([&](size_t i) {   //unroll size: 6/3/2/1
+	UNROLL<STAR_16_NUM>([&](size_t i) {   //unroll size: 6/3/2/1
 		/*const size_t i = iter * 8;
 		__m256 px_i = _mm256_load_ps(&px[i]);
 		__m256 vx_i = _mm256_load_ps(&vx[i]);*/
-		stars[i].px = _mm256_fmadd_ps(stars[i].vx, dt_vec, stars[i].px);
+		stars[i].px = _mm512_fmadd_ps(stars[i].vx, dt_vec, stars[i].px);
 
 	/*	__m256 py_i = _mm256_load_ps(&py[i]);
 		__m256 vy_i = _mm256_load_ps(&vy[i]);*/
-		stars[i].py = _mm256_fmadd_ps(stars[i].vy, dt_vec, stars[i].py);
+		stars[i].py = _mm512_fmadd_ps(stars[i].vy, dt_vec, stars[i].py);
 
 		//__m256 pz_i = _mm256_load_ps(&pz[i]);
 		//__m256 vz_i = _mm256_load_ps(&vz[i]);
-		stars[i].pz = _mm256_fmadd_ps(stars[i].vz, dt_vec, stars[i].pz);
+		stars[i].pz = _mm512_fmadd_ps(stars[i].vz, dt_vec, stars[i].pz);
 		//px[i] += vx[i] * dt;
 		//py[i] += vy[i] * dt;
 		//pz[i] += vz[i] * dt;
@@ -168,42 +172,38 @@ void step() {
 
 float calc() {
 	float energy = 0;
-	for (size_t i = 0; i < STAR_8_NUM; i++) {
+	for (size_t i = 0; i < STAR_16_NUM; i++) {
 		auto const& star_i = stars[i];
-		for (size_t k = 0; k < 8; k++) {
-			__m256 px_ik = _mm256_broadcast_ss(&star_i.px.m256_f32[k]);
-			__m256 py_ik = _mm256_broadcast_ss(&star_i.py.m256_f32[k]);
-			__m256 pz_ik = _mm256_broadcast_ss(&star_i.pz.m256_f32[k]);
-			float vx = stars[i].vx.m256_f32[k];
-			float vy = stars[i].vy.m256_f32[k];
-			float vz = stars[i].vz.m256_f32[k];
+		for (size_t k = 0; k < 16; k++) {
+			__m512 px_ik = _mm512_set1_ps(star_i.px.m512_f32[k]);
+			__m512 py_ik = _mm512_set1_ps(star_i.py.m512_f32[k]);
+			__m512 pz_ik = _mm512_set1_ps(star_i.pz.m512_f32[k]);
+			float vx = stars[i].vx.m512_f32[k];
+			float vy = stars[i].vy.m512_f32[k];
+			float vz = stars[i].vz.m512_f32[k];
 			float v2 = vx * vx + vy * vy + vz * vz;
-			float mass_ik = stars[i].mass.m256_f32[k];
-			__m256 mass_ik_256 = _mm256_broadcast_ss(&mass_ik);
+			float mass_ik = stars[i].mass.m512_f32[k];
+			__m512 mass_ik_256 = _mm512_set1_ps(mass_ik);
 			energy += mass_ik * v2 / 2;
-			__m256 delta_e = _mm256_setzero_ps();
-			for (size_t j = 0; j < STAR_8_NUM; j++) {
-				__m256 dx = _mm256_sub_ps(stars[j].px, px_ik);
-
-				//__m256 py_j = _mm256_load_ps(&py[j]);
-				__m256 dy = _mm256_sub_ps(stars[j].py, py_ik);
-
-				//__m256 pz_j = _mm256_load_ps(&pz[j]);
-				__m256 dz = _mm256_sub_ps(stars[j].pz, pz_ik);
+			__m512 delta_e = _mm512_setzero_ps();
+			for (size_t j = 0; j < STAR_16_NUM; j++) {
+				__m512 dx = _mm512_sub_ps(stars[j].px, px_ik);
+				__m512 dy = _mm512_sub_ps(stars[j].py, py_ik);
+				__m512 dz = _mm512_sub_ps(stars[j].pz, pz_ik);
 				//float dx = px[j] - px[i];
 				//float dy = py[j] - py[i];
 				//float dz = pz[j] - pz[i];
-				__m256 prod = _mm256_mul_ps(dx, dx);
-				prod = _mm256_fmadd_ps(dy, dy, prod);
-				prod = _mm256_fmadd_ps(dz, dz, prod);
-				prod = _mm256_add_ps(eps2, prod);
-				prod = _mm256_rsqrt_ps(prod);
-				prod = _mm256_mul_ps(mass_ik_256, prod);
-				prod = _mm256_mul_ps(stars[j].mass, prod);
+				__m512 prod = _mm512_mul_ps(dx, dx);
+				prod = _mm512_fmadd_ps(dy, dy, prod);
+				prod = _mm512_fmadd_ps(dz, dz, prod);
+				prod = _mm512_add_ps(eps2, prod);
+				prod = _mm512_invsqrt_ps(prod);
+				prod = _mm512_mul_ps(mass_ik_256, prod);
+				prod = _mm512_mul_ps(stars[j].mass, prod);
 				//float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
-				delta_e = _mm256_add_ps(prod, delta_e); reduce256_add_ps(prod);
+				delta_e = _mm512_add_ps(prod, delta_e);
 			}
-			energy -= reduce256_add_ps(_mm256_mul_ps(half_G, delta_e));
+			energy -= reduce512_add_ps(_mm512_mul_ps(half_G, delta_e));
 		}
 	}
 	return energy;
