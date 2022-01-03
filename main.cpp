@@ -5,39 +5,13 @@
 #include <cmath>
 #include <immintrin.h>
 
-const size_t STAR_NUM = 48 * 4;
+const size_t STAR_NUM = 48;
 
 float frand() {
 	return (float)rand() / RAND_MAX * 2 - 1;
 }
-/*
-//x = ( x7, x6, x5, x4, x3, x2, x1, x0 )
-float sum16(__m512 zmm) {
-	__m256 high = _mm512_extractf32x8_ps(zmm, 1);
-	__m256 low = _mm512_castps512_ps256(zmm);
-	__m256 sumOct = _mm256_add_ps(low, high);
-	// hiQuad = ( x7, x6, x5, x4 )
-	const __m128 hiQuad = _mm256_extractf128_ps(sumOct, 1);
-	// loQuad = ( x3, x2, x1, x0 )
-	const __m128 loQuad = _mm256_castps256_ps128(sumOct);
-	// sumQuad = ( x3 + x7, x2 + x6, x1 + x5, x0 + x4 )
-	const __m128 sumQuad = _mm_add_ps(loQuad, hiQuad);
-	// loDual = ( -, -, x1 + x5, x0 + x4 )
-	const __m128 loDual = sumQuad;
-	// hiDual = ( -, -, x3 + x7, x2 + x6 )
-	const __m128 hiDual = _mm_movehl_ps(sumQuad, sumQuad);
-	// sumDual = ( -, -, x1 + x3 + x5 + x7, x0 + x2 + x4 + x6 )
-	const __m128 sumDual = _mm_add_ps(loDual, hiDual);
-	// lo = ( -, -, -, x0 + x2 + x4 + x6 )
-	const __m128 lo = sumDual;
-	// hi = ( -, -, -, x1 + x3 + x5 + x7 )
-	const __m128 hi = _mm_shuffle_ps(sumDual, sumDual, 0x1);
-	// sum = ( -, -, -, x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7 )
-	const __m128 sum = _mm_add_ss(lo, hi);
-	return _mm_cvtss_f32(sum);
-}*/
 
-static float reduce512_add_ps(__m512 zmm) {  
+static float reduce512_add_ps(__m512 zmm) {
 	__m256 high = _mm512_extractf32x8_ps(zmm, 1);
 	__m256 low = _mm512_castps512_ps256(zmm);
 	__m256 sumOct = _mm256_add_ps(low, high);
@@ -95,12 +69,25 @@ const float G = 0.001;
 const float eps = 0.001;
 const float dt = 0.01;
 
-const __m512 eps2 = _mm512_set1_ps(eps * eps);
-const __m512 dt_vec = _mm512_set1_ps(dt);
 const float G_dt = G * dt;
 
+template<class Fn, size_t... M>
+static void unroll_impl(Fn fn, size_t L, std::integer_sequence<size_t, M...> iter) {
+	constexpr auto S = sizeof...(M);
+	for (size_t i = 0; i < L; i++) {
+		((fn(M + i * S)), ...);
+	}
+}
+
+template<size_t N, size_t S = N, class Fn>  // N: total iterations,  S = iterations per loop, S==N implies unrolling completely
+constexpr static void UNROLL(Fn fn) {
+	static_assert(N % S == 0);
+	unroll_impl(fn, N / S, std::make_index_sequence<S>());
+}
+
 void step() {
-	
+	const __m512 eps2 = _mm512_set1_ps(eps * eps);
+	const __m512 dt_vec = _mm512_set1_ps(dt);
 
 	for (size_t i = 0; i < STAR_NUM; i++) {
 		alignas(64) __m512 px_i = _mm512_set1_ps(px[i]);
@@ -113,8 +100,8 @@ void step() {
 		__m512 dvz = _mm512_setzero_ps();
 
 
-#pragma unroll 6
-		for (size_t j = 0; j < STAR_NUM; j += 16) {
+		UNROLL<3>([&](size_t iter) {  //unroll size: 3/1
+			const size_t j = iter * 16;
 			__m512 px_j = _mm512_load_ps(&px[j]);
 			__m512 dx = _mm512_sub_ps(px_j, px_i);
 
@@ -142,7 +129,7 @@ void step() {
 			dvx = _mm512_fmadd_ps(dx, factor, dvx);
 			dvy = _mm512_fmadd_ps(dy, factor, dvy);
 			dvz = _mm512_fmadd_ps(dz, factor, dvz);
-		}
+			});
 		vx[i] += reduce512_add_ps(dvx) * G_dt;
 		vy[i] += reduce512_add_ps(dvy) * G_dt;
 		vz[i] += reduce512_add_ps(dvz) * G_dt;
@@ -151,7 +138,8 @@ void step() {
 		//vz[i] += _mm512_reduce_add_ps(dvz) * G_dt;
 	}
 
-	for (size_t i = 0; i < STAR_NUM; i += 16) {
+	UNROLL<3>([&](size_t iter) {
+		const size_t i = iter * 16;
 		__m512 px_j = _mm512_load_ps(&px[i]);
 		__m512 py_j = _mm512_load_ps(&py[i]);
 		__m512 pz_j = _mm512_load_ps(&pz[i]);
@@ -166,7 +154,7 @@ void step() {
 		//px[i] += vx[i] * dt;
 		//py[i] += vy[i] * dt;
 		//pz[i] += vz[i] * dt;
-	}
+	});
 }
 
 float calc() {
@@ -198,11 +186,11 @@ int main() {
 	init();
 	printf("Initial energy: %f\n", calc());  // Initial energy: -8.571527
 	auto dt = benchmark([&] {
-		for (size_t i = 0; i < 100000; i++)
+		for (size_t i = 0; i < 1000000; i++)
 			step();
 		});
 	printf("Final energy: %f\n", calc());  // Final energy: -8.511734
 	printf("Time elapsed: %ld ms\n", dt);
-	system("pause");
+	//system("pause");
 	return 0;
 }
