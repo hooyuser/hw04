@@ -4,6 +4,29 @@
 #include <chrono>
 #include <cmath>
 
+
+template <typename T,
+    typename TIter = decltype(std::begin(std::declval<T>())),
+    typename = decltype(std::end(std::declval<T>()))>
+    constexpr auto enumerate(T&& iterable)
+{
+    struct iterator
+    {
+        size_t i;
+        TIter iter;
+        bool operator != (const iterator& other) const { return iter != other.iter; }
+        void operator ++ () { ++i; ++iter; }
+        auto operator * () const { return std::tie(i, *iter); }
+    };
+    struct iterable_wrapper
+    {
+        T iterable;
+        auto begin() { return iterator{ 0, std::begin(iterable) }; }
+        auto end() { return iterator{ 0, std::end(iterable) }; }
+    };
+    return iterable_wrapper{ std::forward<T>(iterable) };
+}
+
 float frand() {
     return (float)rand() / RAND_MAX * 2 - 1;
 }
@@ -52,15 +75,17 @@ void step() {
 
 float calc() {
     float energy = 0;
-    for (auto &star: stars) {
+    for (auto& [i, star] : enumerate(stars)) {
         float v2 = star.vx * star.vx + star.vy * star.vy + star.vz * star.vz;
         energy += star.mass * v2 / 2;
-        for (auto &other: stars) {
-            float dx = other.px - star.px;
-            float dy = other.py - star.py;
-            float dz = other.pz - star.pz;
-            float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
-            energy -= other.mass * star.mass * G / sqrt(d2) / 2;
+        for (auto& [j, other] : enumerate(stars)) {
+            if (i != j) {
+                float dx = other.px - star.px;
+                float dy = other.py - star.py;
+                float dz = other.pz - star.pz;
+                float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
+                energy -= other.mass * star.mass * G / sqrt(d2) / 2;
+            }
         }
     }
     return energy;
