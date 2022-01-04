@@ -203,7 +203,7 @@ int main() {
 	init();
 	printf("Initial energy: %f\n", calc());  // Initial energy: -8.571527
 	auto const dt = benchmark([&] {
-		for (size_t i = 0; i < 100000; i++)
+		for (size_t i = 0; i < 1000000; i++)
 			step();
 		});
 	printf("Final energy: %f\n", calc());  // Final energy: -8.562095
