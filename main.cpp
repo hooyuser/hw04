@@ -77,8 +77,13 @@ void init() {
 template<class Fn, size_t... M>
 static void unroll_impl(Fn fn, size_t L, std::integer_sequence<size_t, M...> iter) {
 	constexpr auto S = sizeof...(M);
-	for (size_t i = 0; i < L; i++) {
-		((fn(M + i * S)), ...);
+	if (L == 1) {
+		((fn(M)), ...);
+	}
+	else {
+		for (size_t i = 0; i < L; i++) {
+			((fn(M + i * S)), ...);
+		}
 	}
 }
 
@@ -91,11 +96,9 @@ constexpr static void UNROLL(Fn fn) {
 void step() {
 	const __m512 eps2 = _mm512_set1_ps(eps * eps);
 	const __m512 dt_vec = _mm512_set1_ps(dt);
-
-	for (size_t i = 0; i < stars.size(); i++) {
+	UNROLL<stars.size(), 1>([&](size_t i) {
 		auto& star_i = stars[i];
-
-		for (size_t k = 0; k < SIMD_WIDTH; k++) {
+		UNROLL<SIMD_WIDTH, 1>([&](size_t k) {		
 			__m512 px_ik = _mm512_set1_ps(star_i.px.m512_f32[k]);  //broadcast
 			__m512 py_ik = _mm512_set1_ps(star_i.py.m512_f32[k]);
 			__m512 pz_ik = _mm512_set1_ps(star_i.pz.m512_f32[k]);
@@ -140,8 +143,8 @@ void step() {
 			//star_i.vx.m512_f32[k] += _mm512_reduce_add_ps(d_vx) * G_dt;  //alternatives
 			//star_i.vy.m512_f32[k] += _mm512_reduce_add_ps(d_vy) * G_dt;
 			//star_i.vz.m512_f32[k] += _mm512_reduce_add_ps(d_vz) * G_dt;
-		}
-	}
+			});
+		});
 
 	UNROLL<stars.size()>([&](size_t i) {   //unrolling size: 3/1
 		stars[i].px = _mm512_fmadd_ps(stars[i].vx, dt_vec, stars[i].px);
