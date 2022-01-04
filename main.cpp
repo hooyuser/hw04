@@ -14,9 +14,6 @@ const float eps = 0.001;
 const float dt = 0.01;
 const float G_dt = G * dt;
 
-const __m512 eps2 = _mm512_set1_ps(eps * eps);
-const __m512 half_G = _mm512_set1_ps(0.5 * G);
-
 struct Star_16 {
 	alignas(64) __m512 px;
 	alignas(64) __m512 py;
@@ -91,7 +88,7 @@ constexpr static void UNROLL(Fn fn) {
 }
 
 void step() {
-	
+	const __m512 eps2 = _mm512_set1_ps(eps * eps);
 	const __m512 dt_vec = _mm512_set1_ps(dt);
 
 	for (size_t i = 0; i < STAR_16_NUM; i++) {
@@ -156,39 +153,31 @@ void step() {
 }
 
 float calc() {
-	float energy = 0;
+	float energy = 0.f;
+	const float half_G = 0.5 * G;
 	for (size_t i = 0; i < STAR_16_NUM; i++) {
 		auto const& star_i = stars[i];
 		for (size_t k = 0; k < 16; k++) {
-			__m512 px_ik = _mm512_set1_ps(star_i.px.m512_f32[k]);
-			__m512 py_ik = _mm512_set1_ps(star_i.py.m512_f32[k]);
-			__m512 pz_ik = _mm512_set1_ps(star_i.pz.m512_f32[k]);
-			float vx = stars[i].vx.m512_f32[k];
-			float vy = stars[i].vy.m512_f32[k];
-			float vz = stars[i].vz.m512_f32[k];
-			float v2 = vx * vx + vy * vy + vz * vz;
-			float mass_ik = stars[i].mass.m512_f32[k];
-			__m512 mass_ik_256 = _mm512_set1_ps(mass_ik);
+			const float vx = star_i.vx.m512_f32[k];
+			const float vy = star_i.vy.m512_f32[k];
+			const float vz = star_i.vz.m512_f32[k];
+			const float v2 = vx * vx + vy * vy + vz * vz;
+			float mass_ik = star_i.mass.m512_f32[k];
 			energy += mass_ik * v2 / 2;
-			__m512 delta_e = _mm512_setzero_ps();
+			float delta_e = 0.f;
 			for (size_t j = 0; j < STAR_16_NUM; j++) {
-				__m512 dx = _mm512_sub_ps(stars[j].px, px_ik);
-				__m512 dy = _mm512_sub_ps(stars[j].py, py_ik);
-				__m512 dz = _mm512_sub_ps(stars[j].pz, pz_ik);
-				//float dx = px[j] - px[i];
-				//float dy = py[j] - py[i];
-				//float dz = pz[j] - pz[i];
-				__m512 prod = _mm512_mul_ps(dx, dx);
-				prod = _mm512_fmadd_ps(dy, dy, prod);
-				prod = _mm512_fmadd_ps(dz, dz, prod);
-				prod = _mm512_add_ps(eps2, prod);
-				prod = _mm512_invsqrt_ps(prod);
-				prod = _mm512_mul_ps(mass_ik_256, prod);
-				prod = _mm512_mul_ps(stars[j].mass, prod);
-				//float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
-				delta_e = _mm512_add_ps(prod, delta_e);
+				auto const& star_j = stars[j];
+				for (size_t m = 0; m < 16; m++) {
+					if (i != j && k != m) {
+						const float dx = star_j.px.m512_f32[m];
+						const float dy = star_j.py.m512_f32[m];
+						const float dz = star_j.pz.m512_f32[m];
+						const float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
+						delta_e += star_j.mass.m512_f32[m] / sqrt(d2);
+					}
+				}
 			}
-			energy -= reduce512_add_ps(_mm512_mul_ps(half_G, delta_e));
+			energy -= delta_e * mass_ik * half_G;
 		}
 	}
 	return energy;
