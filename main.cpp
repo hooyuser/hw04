@@ -4,6 +4,7 @@
 #include <cmath>
 #include <immintrin.h>
 #include <utility>
+#include <array>
 
 constexpr size_t STAR_NUM = 48;
 constexpr size_t SIMD_WIDTH = 16;  //16 floats
@@ -24,7 +25,7 @@ struct Star_16 {
 	alignas(64) __m512 vz;
 };
 
-Star_16 stars[STAR_16_NUM];
+std::array<Star_16, STAR_16_NUM> stars;
 
 static float frand() {
 	return (float)rand() / RAND_MAX * 2 - 1;
@@ -60,7 +61,7 @@ static float reduce512_add_ps(__m512 zmm) {
 }
 
 void init() {
-	for (int i = 0; i < STAR_16_NUM; i++) {
+	for (int i = 0; i < stars.size(); i++) {
 		for (int j = 0; j < SIMD_WIDTH; j++) {
 			stars[i].px.m512_f32[j] = frand();
 			stars[i].py.m512_f32[j] = frand();
@@ -91,19 +92,19 @@ void step() {
 	const __m512 eps2 = _mm512_set1_ps(eps * eps);
 	const __m512 dt_vec = _mm512_set1_ps(dt);
 
-	for (size_t i = 0; i < STAR_16_NUM; i++) {
+	for (size_t i = 0; i < stars.size(); i++) {
 		auto& star_i = stars[i];
 
-		for (size_t k = 0; k < 8; k++) {
-			__m512 px_ik = _mm512_set1_ps(star_i.px.m512_f32[k]);
+		for (size_t k = 0; k < SIMD_WIDTH; k++) {
+			__m512 px_ik = _mm512_set1_ps(star_i.px.m512_f32[k]);  //broadcast
 			__m512 py_ik = _mm512_set1_ps(star_i.py.m512_f32[k]);
 			__m512 pz_ik = _mm512_set1_ps(star_i.pz.m512_f32[k]);
 
-			__m512 d_vx = _mm512_setzero_ps();
-			__m512 d_vy = _mm512_setzero_ps();
-			__m512 d_vz = _mm512_setzero_ps();
+			__m512 d_vx = _mm512_setzero_ps();  //d_vx = 0
+			__m512 d_vy = _mm512_setzero_ps();	//d_vy = 0
+			__m512 d_vz = _mm512_setzero_ps();	//d_vz = 0
 
-			UNROLL<STAR_16_NUM>([&](size_t j) {  //unroll size: 3/1
+			UNROLL<stars.size()>([&](size_t j) {  //unrolling size: 3/1
 				__m512 dx = _mm512_sub_ps(stars[j].px, px_ik);
 				__m512 dy = _mm512_sub_ps(stars[j].py, py_ik);
 				__m512 dz = _mm512_sub_ps(stars[j].pz, pz_ik);
@@ -119,10 +120,10 @@ void step() {
 
 				__m512 inverse_sqrt = _mm512_rsqrt14_ps(prod);  // an approximate version of _mm512_invsqrt_ps 
 				__m512 inverse_sqrt2 = _mm512_mul_ps(inverse_sqrt, inverse_sqrt);
-				inverse_sqrt = _mm512_mul_ps(inverse_sqrt2, inverse_sqrt);
+				__m512 inverse_sqrt3 = _mm512_mul_ps(inverse_sqrt2, inverse_sqrt);
 				//float inverse_sqrt = 1 / sqrt(prod)^3;
 
-				__m512 factor = _mm512_mul_ps(inverse_sqrt, stars[j].mass);
+				__m512 factor = _mm512_mul_ps(inverse_sqrt3, stars[j].mass);
 				//float factor = mass[j] / sqrt(prod)^3;
 
 				d_vx = _mm512_fmadd_ps(dx, factor, d_vx);
@@ -142,7 +143,7 @@ void step() {
 		}
 	}
 
-	UNROLL<STAR_16_NUM>([&](size_t i) {   //unroll size: 3/1
+	UNROLL<stars.size()>([&](size_t i) {   //unrolling size: 3/1
 		stars[i].px = _mm512_fmadd_ps(stars[i].vx, dt_vec, stars[i].px);
 		stars[i].py = _mm512_fmadd_ps(stars[i].vy, dt_vec, stars[i].py);
 		stars[i].pz = _mm512_fmadd_ps(stars[i].vz, dt_vec, stars[i].pz);
@@ -155,9 +156,10 @@ void step() {
 float calc() {
 	float energy = 0.f;
 	const float half_G = 0.5 * G;
-	for (size_t i = 0; i < STAR_16_NUM; i++) {
+	for (size_t i = 0; i < stars.size(); i++) {
 		auto const& star_i = stars[i];
-		for (size_t k = 0; k < 16; k++) {
+		for (size_t k = 0; k < SIMD_WIDTH; k++) {
+
 			const float vx = star_i.vx.m512_f32[k];
 			const float vy = star_i.vy.m512_f32[k];
 			const float vz = star_i.vz.m512_f32[k];
@@ -165,9 +167,11 @@ float calc() {
 			float mass_ik = star_i.mass.m512_f32[k];
 			energy += mass_ik * v2 / 2;
 			float delta_e = 0.f;
-			for (size_t j = 0; j < STAR_16_NUM; j++) {
+
+			for (size_t j = 0; j < stars.size(); j++) {
 				auto const& star_j = stars[j];
-				for (size_t m = 0; m < 16; m++) {
+				for (size_t m = 0; m < SIMD_WIDTH; m++) {
+
 					if (i != j && k != m) {
 						const float dx = star_j.px.m512_f32[m];
 						const float dy = star_j.py.m512_f32[m];
