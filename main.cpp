@@ -15,6 +15,11 @@ const float eps = 0.001;
 const float dt = 0.01;
 const float G_dt = G * dt;
 
+const __m512 eps2 = _mm512_set1_ps(eps * eps);
+const __m512 dt_vec = _mm512_set1_ps(dt);
+const __m512 vec_G_dt = _mm512_set1_ps(G_dt);
+
+
 struct Star_16 {
 	alignas(64) __m512 px;
 	alignas(64) __m512 py;
@@ -94,23 +99,23 @@ constexpr static void UNROLL(Fn fn) {
 }
 
 void step() {
-	const __m512 eps2 = _mm512_set1_ps(eps * eps);
-	const __m512 dt_vec = _mm512_set1_ps(dt);
-	UNROLL<stars.size(), 1>([&](size_t i) {
-		auto& star_i = stars[i];
+	
+	UNROLL<stars.size(), 1>([&](size_t j) {
+		auto& star_j = stars[j];
 		UNROLL<SIMD_WIDTH, 1>([&](size_t k) {		
-			__m512 px_ik = _mm512_set1_ps(star_i.px.m512_f32[k]);  //broadcast
-			__m512 py_ik = _mm512_set1_ps(star_i.py.m512_f32[k]);
-			__m512 pz_ik = _mm512_set1_ps(star_i.pz.m512_f32[k]);
+			__m512 px_jk = _mm512_set1_ps(star_j.px.m512_f32[k]);  
+			__m512 py_jk = _mm512_set1_ps(star_j.py.m512_f32[k]);
+			__m512 pz_jk = _mm512_set1_ps(star_j.pz.m512_f32[k]);
+			__m512 mass_jk = _mm512_set1_ps(star_j.mass.m512_f32[k]);
 
-			__m512 d_vx = _mm512_setzero_ps();  //d_vx = 0
-			__m512 d_vy = _mm512_setzero_ps();	//d_vy = 0
-			__m512 d_vz = _mm512_setzero_ps();	//d_vz = 0
+			//__m512 d_vx = _mm512_setzero_ps();  //d_vx = 0
+			//__m512 d_vy = _mm512_setzero_ps();	//d_vy = 0
+			//__m512 d_vz = _mm512_setzero_ps();	//d_vz = 0
 
-			UNROLL<stars.size()>([&](size_t j) {  //unrolling size: 3/1
-				__m512 dx = _mm512_sub_ps(stars[j].px, px_ik);
-				__m512 dy = _mm512_sub_ps(stars[j].py, py_ik);
-				__m512 dz = _mm512_sub_ps(stars[j].pz, pz_ik);
+			UNROLL<stars.size()>([&](size_t i) {  //unrolling size: 3/1
+				__m512 dx = _mm512_sub_ps(px_jk, stars[i].px);
+				__m512 dy = _mm512_sub_ps(py_jk, stars[i].py);
+				__m512 dz = _mm512_sub_ps(pz_jk, stars[i].pz);
 				//float dx = px[j] - px[i];
 				//float dy = py[j] - py[i];
 				//float dz = pz[j] - pz[i];
@@ -126,20 +131,29 @@ void step() {
 				__m512 inverse_sqrt3 = _mm512_mul_ps(inverse_sqrt2, inverse_sqrt);
 				//float inverse_sqrt = 1 / sqrt(prod)^3;
 
-				__m512 factor = _mm512_mul_ps(inverse_sqrt3, stars[j].mass);
+				__m512 factor = _mm512_mul_ps(inverse_sqrt3, mass_jk);
+				factor = _mm512_mul_ps(vec_G_dt, factor);
 				//float factor = mass[j] / sqrt(prod)^3;
 
-				d_vx = _mm512_fmadd_ps(dx, factor, d_vx);
+				/*d_vx = _mm512_fmadd_ps(dx, factor, d_vx);
 				d_vy = _mm512_fmadd_ps(dy, factor, d_vy);
-				d_vz = _mm512_fmadd_ps(dz, factor, d_vz);
+				d_vz = _mm512_fmadd_ps(dz, factor, d_vz);*/
+
+				stars[i].vx = _mm512_fmadd_ps(dx, factor, stars[i].vx);
+				stars[i].vy = _mm512_fmadd_ps(dy, factor, stars[i].vy);
+				stars[i].vz = _mm512_fmadd_ps(dz, factor, stars[i].vz);
+
+		/*		_mm512_store_ps(&vx[i], new_vx_i);
+				_mm512_store_ps(&vy[i], new_vy_i);
+				_mm512_store_ps(&vz[i], new_vz_i);*/
 				//d_vx += dx * factor;
 				//d_vy += dy * factor; 
 				//d_vz += dz * factor; 
 				});
 
-			star_i.vx.m512_f32[k] += reduce512_add_ps(d_vx) * G_dt;
-			star_i.vy.m512_f32[k] += reduce512_add_ps(d_vy) * G_dt;
-			star_i.vz.m512_f32[k] += reduce512_add_ps(d_vz) * G_dt;
+			//star_i.vx.m512_f32[k] += reduce512_add_ps(d_vx) * G_dt;
+			//star_i.vy.m512_f32[k] += reduce512_add_ps(d_vy) * G_dt;
+			//star_i.vz.m512_f32[k] += reduce512_add_ps(d_vz) * G_dt;
 			//star_i.vx.m512_f32[k] += _mm512_reduce_add_ps(d_vx) * G_dt;  //alternatives
 			//star_i.vy.m512_f32[k] += _mm512_reduce_add_ps(d_vy) * G_dt;
 			//star_i.vz.m512_f32[k] += _mm512_reduce_add_ps(d_vz) * G_dt;
