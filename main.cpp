@@ -4,8 +4,10 @@
 #include <cmath>
 #include <immintrin.h>
 #include <utility>
+#include <array>
 
 const size_t STAR_NUM = 48;
+constexpr size_t SIMD_WIDTH = 8;
 constexpr size_t STAR_8_NUM = (STAR_NUM + 7) / 8;
 
 const float G = 0.001;
@@ -15,6 +17,8 @@ const float G_dt = G * dt;
 
 const __m256 eps2 = _mm256_set1_ps(eps * eps);
 const __m256 half_G = _mm256_set1_ps(0.5 * G);
+const __m256 vec_dt = _mm256_set1_ps(dt);
+const __m256 vec_G_dt = _mm256_set1_ps(G_dt);
 
 struct Star_8 {
 	alignas(32) __m256 px;
@@ -87,28 +91,24 @@ constexpr static void UNROLL(Fn fn) {
 }
 
 void step() {
-	
-	const __m256 dt_vec = _mm256_set1_ps(dt);
-
-	for (size_t i = 0; i < STAR_8_NUM; i++) {
-		auto& star_i = stars[i];
+	std::array<__m256, STAR_8_NUM> d_vx{ 0.0f };
+	std::array<__m256, STAR_8_NUM> d_vy{ 0.0f };
+	std::array<__m256, STAR_8_NUM> d_vz{ 0.0f };
+	for (size_t j = 0; j < STAR_8_NUM; j++) {
+		auto& star_j = stars[j];
 		for (size_t k = 0; k < 8; k++) {
-			__m256 px_ik = _mm256_broadcast_ss(&star_i.px.m256_f32[k]);
-			__m256 py_ik = _mm256_broadcast_ss(&star_i.py.m256_f32[k]);
-			__m256 pz_ik = _mm256_broadcast_ss(&star_i.pz.m256_f32[k]);
-
-			__m256 d_vx = _mm256_setzero_ps();
+			__m256 px_jk = _mm256_broadcast_ss(&star_j.px.m256_f32[k]);
+			__m256 py_jk = _mm256_broadcast_ss(&star_j.py.m256_f32[k]);
+			__m256 pz_jk = _mm256_broadcast_ss(&star_j.pz.m256_f32[k]);
+			__m256 mass_jk = _mm256_broadcast_ss(&stars[j].mass.m256_f32[k]);
+			/*__m256 d_vx = _mm256_setzero_ps();
 			__m256 d_vy = _mm256_setzero_ps();
-			__m256 d_vz = _mm256_setzero_ps();
+			__m256 d_vz = _mm256_setzero_ps();*/
 
-			UNROLL<STAR_8_NUM, 6>([&](size_t j) {  //unroll size: 6/3/2/1
-				__m256 dx = _mm256_sub_ps(stars[j].px, px_ik);
-
-				//__m256 py_j = _mm256_load_ps(&py[j]);
-				__m256 dy = _mm256_sub_ps(stars[j].py, py_ik);
-
-				//__m256 pz_j = _mm256_load_ps(&pz[j]);
-				__m256 dz = _mm256_sub_ps(stars[j].pz, pz_ik);
+			UNROLL<STAR_8_NUM, 1>([&](size_t i) {  //unroll size: 6/3/2/1
+				__m256 dx = _mm256_sub_ps(px_jk, stars[i].px);
+				__m256 dy = _mm256_sub_ps(py_jk, stars[i].py);
+				__m256 dz = _mm256_sub_ps(pz_jk, stars[i].pz);
 				//float dx = px[j] - px[i];
 				//float dy = py[j] - py[i];
 				//float dz = pz[j] - pz[i];
@@ -125,20 +125,16 @@ void step() {
 				//float inverse_sqrt = 1 / sqrt(prod)^3;
 
 				//__m256 mass_j = _mm256_load_ps(&mass[j]);
-				__m256 factor = _mm256_mul_ps(inverse_sqrt, stars[j].mass);
+				__m256 factor = _mm256_mul_ps(inverse_sqrt, mass_jk);
 				//float factor = mass[j] / sqrt(prod)^3;
 
-				d_vx = _mm256_fmadd_ps(dx, factor, d_vx);
-				d_vy = _mm256_fmadd_ps(dy, factor, d_vy);
-				d_vz = _mm256_fmadd_ps(dz, factor, d_vz);
+				d_vx[i] = _mm256_fmadd_ps(dx, factor, d_vx[i]);
+				d_vy[i] = _mm256_fmadd_ps(dy, factor, d_vy[i]);
+				d_vz[i] = _mm256_fmadd_ps(dz, factor, d_vz[i]);
 				//d_vx += dx * factor;
 				//d_vy += dy * factor; 
 				//d_vz += dz * factor; 
 				});
-
-			star_i.vx.m256_f32[k] += reduce256_add_ps(d_vx) * G_dt;
-			star_i.vy.m256_f32[k] += reduce256_add_ps(d_vy) * G_dt;
-			star_i.vz.m256_f32[k] += reduce256_add_ps(d_vz) * G_dt;
 		}
 	}
 	//for (size_t i = 0; i < STAR_NUM; i++) {
@@ -147,19 +143,14 @@ void step() {
 	//	pz[i] += vz[i] * dt;
 	//}
 
-	UNROLL<STAR_8_NUM, 6>([&](size_t i) {   //unroll size: 6/3/2/1
-		/*const size_t i = iter * 8;
-		__m256 px_i = _mm256_load_ps(&px[i]);
-		__m256 vx_i = _mm256_load_ps(&vx[i]);*/
-		stars[i].px = _mm256_fmadd_ps(stars[i].vx, dt_vec, stars[i].px);
+	UNROLL<STAR_8_NUM, 1>([&](size_t i) {   //unroll size: 6/3/2/1
+		stars[i].vx = _mm256_fmadd_ps(d_vx[i], vec_G_dt, stars[i].vx);
+		stars[i].vy = _mm256_fmadd_ps(d_vy[i], vec_G_dt, stars[i].vy);
+		stars[i].vz = _mm256_fmadd_ps(d_vz[i], vec_G_dt, stars[i].vz);
 
-	/*	__m256 py_i = _mm256_load_ps(&py[i]);
-		__m256 vy_i = _mm256_load_ps(&vy[i]);*/
-		stars[i].py = _mm256_fmadd_ps(stars[i].vy, dt_vec, stars[i].py);
-
-		//__m256 pz_i = _mm256_load_ps(&pz[i]);
-		//__m256 vz_i = _mm256_load_ps(&vz[i]);
-		stars[i].pz = _mm256_fmadd_ps(stars[i].vz, dt_vec, stars[i].pz);
+		stars[i].px = _mm256_fmadd_ps(stars[i].vx, vec_dt, stars[i].px);
+		stars[i].py = _mm256_fmadd_ps(stars[i].vy, vec_dt, stars[i].py);
+		stars[i].pz = _mm256_fmadd_ps(stars[i].vz, vec_dt, stars[i].pz);
 		//px[i] += vx[i] * dt;
 		//py[i] += vy[i] * dt;
 		//pz[i] += vz[i] * dt;
