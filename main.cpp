@@ -77,7 +77,7 @@ void step() {
 	std::array<__m512, STAR_16_NUM> d_vz{};
 	UNROLL<stars.size(), 1>([&](size_t j) {
 		auto& star_j = stars[j];
-		UNROLL<SIMD_WIDTH, 1>([&](size_t k) {		
+		UNROLL<SIMD_WIDTH, 1>([&](size_t k) {
 			__m512 px_jk = _mm512_set1_ps(star_j.px.m512_f32[k]);  
 			__m512 py_jk = _mm512_set1_ps(star_j.py.m512_f32[k]);
 			__m512 pz_jk = _mm512_set1_ps(star_j.pz.m512_f32[k]);
@@ -177,7 +177,7 @@ int main() {
 	init();
 	printf("Initial energy: %f\n", calc());  // Initial energy: -8.571527
 	auto const dt = benchmark([&] {
-		for (size_t i = 0; i < 2000000; i++)
+		for (size_t i = 0; i < 100000; i++)
 			step();
 		});
 	printf("Final energy: %f\n", calc());  // Final energy: -8.562095
