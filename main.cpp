@@ -87,15 +87,18 @@ float calc() {
     for (auto&& [i, star] : enumerate(stars)) {
         float v2 = star.vx * star.vx + star.vy * star.vy + star.vz * star.vz;
         energy += star.mass * v2 / 2;
+        float delta_e = 0.f;
         for (auto&& [j, other] : enumerate(stars)) {
+
             if (i != j) {
                 float dx = other.px - star.px;
                 float dy = other.py - star.py;
                 float dz = other.pz - star.pz;
                 float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
-                energy -= other.mass * star.mass * G / sqrt(d2) * 0.5;
+                delta_e += other.mass * star.mass / sqrt(d2);
             }
         }
+        energy -= delta_e * G * 0.5;
     }
     return energy;
 }
