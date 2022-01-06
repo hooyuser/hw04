@@ -10,16 +10,16 @@ constexpr size_t STAR_NUM = 48;
 constexpr size_t SIMD_WIDTH = 16;  //16 floats
 constexpr size_t STAR_16_NUM = (STAR_NUM + SIMD_WIDTH - 1) / SIMD_WIDTH;
 
-const float G = 0.001;
-const float eps = 0.001;
-const float dt = 0.01;
-const float G_dt = G * dt;
+constexpr float G = 0.001;
+constexpr float eps = 0.001;
+constexpr float dt = 0.01;
+constexpr float G_dt = G * dt;
 
 const __m512 eps2 = _mm512_set1_ps(eps * eps);
 const __m512 vec_dt = _mm512_set1_ps(dt);
 const __m512 vec_G_dt = _mm512_set1_ps(G_dt);
 
-
+//Layout: AoSoA
 struct Star_16 {
 	alignas(64) __m512 vx;
 	alignas(64) __m512 vy;
