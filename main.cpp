@@ -53,7 +53,7 @@ void init() {
 }
 
 template<class Fn, size_t... M>
-static void unroll_impl(Fn fn, size_t L, std::integer_sequence<size_t, M...> iter) {
+__forceinline static void unroll_impl(Fn fn, size_t L, std::integer_sequence<size_t, M...> iter) {
 	constexpr auto S = sizeof...(M);
 	if (L == 1) {
 		((fn(M)), ...);
@@ -66,7 +66,7 @@ static void unroll_impl(Fn fn, size_t L, std::integer_sequence<size_t, M...> ite
 }
 
 template<size_t N, size_t S = N, class Fn>   // N: total iterations, S = iterations per loop. S==N implies unrolling completely
-constexpr static void UNROLL(Fn fn) {
+__forceinline constexpr static void UNROLL(Fn fn) {
 	static_assert(N % S == 0);
 	unroll_impl(fn, N / S, std::make_index_sequence<S>());
 }
@@ -75,9 +75,9 @@ void step() {
 	std::array<__m512, STAR_16_NUM> d_vx{};
 	std::array<__m512, STAR_16_NUM> d_vy{};
 	std::array<__m512, STAR_16_NUM> d_vz{};
-	UNROLL<stars.size(), 1>([&](size_t j) {
+	for (size_t j = 0; j < stars.size(); ++j) {
 		auto& star_j = stars[j];
-		UNROLL<SIMD_WIDTH, 1>([&](size_t k) {
+		for (size_t k = 0; k < SIMD_WIDTH; ++k) {
 			__m512 px_jk = _mm512_set1_ps(star_j.px.m512_f32[k]);
 			__m512 py_jk = _mm512_set1_ps(star_j.py.m512_f32[k]);
 			__m512 pz_jk = _mm512_set1_ps(star_j.pz.m512_f32[k]);
@@ -112,8 +112,8 @@ void step() {
 				//d_vy += dy * factor; 
 				//d_vz += dz * factor; 
 				});
-			});
-		});
+			}
+		}
 
 	UNROLL<stars.size()>([&](size_t i) {   //unrolling size: 3/1
 		stars[i].vx = _mm512_fmadd_ps(d_vx[i], vec_G_dt, stars[i].vx);
