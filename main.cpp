@@ -132,7 +132,7 @@ void step() {
 
 float calc() {
 	float energy = 0.f;
-	const float half_G = 0.5 * G;
+	const float half_G = G * 0.5;
 	for (size_t i = 0; i < stars.size(); i++) {
 		auto const& star_i = stars[i];
 
@@ -143,8 +143,9 @@ float calc() {
 			const float vx = star_i.vx.m512_f32[k];
 			const float vy = star_i.vy.m512_f32[k];
 			const float vz = star_i.vz.m512_f32[k];
+			const float mass_ik = star_i.mass.m512_f32[k];
+
 			const float v2 = vx * vx + vy * vy + vz * vz;
-			float mass_ik = star_i.mass.m512_f32[k];
 			energy += mass_ik * v2 / 2;
 			float delta_e = 0.f;
 
