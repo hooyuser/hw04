@@ -3,7 +3,9 @@
 #include <vector>
 #include <chrono>
 #include <cmath>
+#include <array>
 
+constexpr size_t STAR_NUM = 48;
 
 template <typename T,
     typename TIter = decltype(std::begin(std::declval<T>())),
@@ -54,19 +56,26 @@ float eps = 0.001;
 float dt = 0.01;
 
 void step() {
-    for (auto &star: stars) {
-        for (auto &other: stars) {
+    std::array<float, STAR_NUM> delta_vx = { 0.f };
+    std::array<float, STAR_NUM> delta_vy = { 0.f };
+    std::array<float, STAR_NUM> delta_vz = { 0.f };
+
+    for (auto& other : stars) {
+        for (auto&& [i, star] : enumerate(stars)) {
             float dx = other.px - star.px;
             float dy = other.py - star.py;
             float dz = other.pz - star.pz;
             float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
             d2 *= sqrt(d2);
-            star.vx += dx * other.mass * G * dt / d2;
-            star.vy += dy * other.mass * G * dt / d2;
-            star.vz += dz * other.mass * G * dt / d2;
+            delta_vx[i] += dx * other.mass / d2;
+            delta_vy[i] += dy * other.mass / d2;
+            delta_vz[i] += dz * other.mass / d2;
         }
     }
-    for (auto &star: stars) {
+    for (auto&& [i, star] : enumerate(stars)) {
+        star.vx += delta_vx[i] * G * dt ;
+        star.vy += delta_vy[i] * G * dt ;
+        star.vz += delta_vz[i] * G * dt ;
         star.px += star.vx * dt;
         star.py += star.vy * dt;
         star.pz += star.vz * dt;
