@@ -153,7 +153,7 @@ float calc() {
 				auto const& star_j = stars[j];
 				for (size_t m = 0; m < SIMD_WIDTH; m++) {
 
-					if (i != j && k != m) {
+					if (!(i == j && k == m)) {
 						const float dx = star_j.px.m512_f32[m] - px;
 						const float dy = star_j.py.m512_f32[m] - py;
 						const float dz = star_j.pz.m512_f32[m] - pz;
