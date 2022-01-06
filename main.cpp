@@ -84,16 +84,16 @@ void step() {
 
 float calc() {
     float energy = 0;
-    for (auto& [i, star] : enumerate(stars)) {
+    for (auto&& [i, star] : enumerate(stars)) {
         float v2 = star.vx * star.vx + star.vy * star.vy + star.vz * star.vz;
         energy += star.mass * v2 / 2;
-        for (auto& [j, other] : enumerate(stars)) {
+        for (auto&& [j, other] : enumerate(stars)) {
             if (i != j) {
                 float dx = other.px - star.px;
                 float dy = other.py - star.py;
                 float dz = other.pz - star.pz;
                 float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
-                energy -= other.mass * star.mass * G / sqrt(d2) / 2;
+                energy -= other.mass * star.mass * G / sqrt(d2) * 0.5;
             }
         }
     }
