@@ -95,10 +95,10 @@ float calc() {
                 float dy = other.py - star.py;
                 float dz = other.pz - star.pz;
                 float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
-                delta_e += other.mass * star.mass / sqrt(d2);
+                delta_e += other.mass  / sqrt(d2);
             }
         }
-        energy -= delta_e * G * 0.5;
+        energy -= delta_e * star.mass * G * 0.5;
     }
     return energy;
 }
