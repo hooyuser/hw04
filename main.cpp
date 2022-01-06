@@ -105,7 +105,7 @@ void step() {
 			__m256 d_vy = _mm256_setzero_ps();
 			__m256 d_vz = _mm256_setzero_ps();*/
 
-			UNROLL<STAR_8_NUM, 1>([&](size_t i) {  //unroll size: 6/3/2/1
+			UNROLL<STAR_8_NUM>([&](size_t i) {  //unroll size: 6/3/2/1
 				__m256 dx = _mm256_sub_ps(px_jk, stars[i].px);
 				__m256 dy = _mm256_sub_ps(py_jk, stars[i].py);
 				__m256 dz = _mm256_sub_ps(pz_jk, stars[i].pz);
@@ -143,7 +143,7 @@ void step() {
 	//	pz[i] += vz[i] * dt;
 	//}
 
-	UNROLL<STAR_8_NUM, 1>([&](size_t i) {   //unroll size: 6/3/2/1
+	UNROLL<STAR_8_NUM>([&](size_t i) {   //unroll size: 6/3/2/1
 		stars[i].vx = _mm256_fmadd_ps(d_vx[i], vec_G_dt, stars[i].vx);
 		stars[i].vy = _mm256_fmadd_ps(d_vy[i], vec_G_dt, stars[i].vy);
 		stars[i].vz = _mm256_fmadd_ps(d_vz[i], vec_G_dt, stars[i].vz);
