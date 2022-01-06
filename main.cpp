@@ -28,7 +28,7 @@ struct Star_16 {
 	alignas(64) __m512 px;
 	alignas(64) __m512 py;
 	alignas(64) __m512 pz;
-	
+
 	alignas(64) __m512 mass;
 };
 
@@ -78,7 +78,7 @@ void step() {
 	UNROLL<stars.size(), 1>([&](size_t j) {
 		auto& star_j = stars[j];
 		UNROLL<SIMD_WIDTH, 1>([&](size_t k) {
-			__m512 px_jk = _mm512_set1_ps(star_j.px.m512_f32[k]);  
+			__m512 px_jk = _mm512_set1_ps(star_j.px.m512_f32[k]);
 			__m512 py_jk = _mm512_set1_ps(star_j.py.m512_f32[k]);
 			__m512 pz_jk = _mm512_set1_ps(star_j.pz.m512_f32[k]);
 			__m512 mass_jk = _mm512_set1_ps(star_j.mass.m512_f32[k]);
@@ -135,8 +135,11 @@ float calc() {
 	const float half_G = 0.5 * G;
 	for (size_t i = 0; i < stars.size(); i++) {
 		auto const& star_i = stars[i];
-		for (size_t k = 0; k < SIMD_WIDTH; k++) {
 
+		for (size_t k = 0; k < SIMD_WIDTH; k++) {
+			const float px = star_i.px.m512_f32[k];
+			const float py = star_i.py.m512_f32[k];
+			const float pz = star_i.pz.m512_f32[k];
 			const float vx = star_i.vx.m512_f32[k];
 			const float vy = star_i.vy.m512_f32[k];
 			const float vz = star_i.vz.m512_f32[k];
@@ -150,9 +153,9 @@ float calc() {
 				for (size_t m = 0; m < SIMD_WIDTH; m++) {
 
 					if (i != j && k != m) {
-						const float dx = star_j.px.m512_f32[m];
-						const float dy = star_j.py.m512_f32[m];
-						const float dz = star_j.pz.m512_f32[m];
+						const float dx = star_j.px.m512_f32[m] - px;
+						const float dy = star_j.py.m512_f32[m] - py;
+						const float dz = star_j.pz.m512_f32[m] - pz;
 						const float d2 = dx * dx + dy * dy + dz * dz + eps * eps;
 						delta_e += star_j.mass.m512_f32[m] / sqrt(d2);
 					}
