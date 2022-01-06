@@ -100,10 +100,9 @@ void step() {
 				__m512 inverse_sqrt = _mm512_rsqrt14_ps(prod);  // an approximate version of _mm512_invsqrt_ps 
 				__m512 inverse_sqrt2 = _mm512_mul_ps(inverse_sqrt, inverse_sqrt);
 				__m512 inverse_sqrt3 = _mm512_mul_ps(inverse_sqrt2, inverse_sqrt);
-				//float inverse_sqrt = 1 / sqrt(prod)^3;
+				//float inverse_sqrt3 = 1 / sqrt(prod)^3;
 
 				__m512 factor = _mm512_mul_ps(inverse_sqrt3, mass_jk);
-				//factor = _mm512_mul_ps(vec_G_dt, factor);
 				//float factor = mass[j] / sqrt(prod)^3;
 
 				d_vx[i] = _mm512_fmadd_ps(dx, factor, d_vx[i]);
@@ -120,6 +119,9 @@ void step() {
 		stars[i].vx = _mm512_fmadd_ps(d_vx[i], vec_G_dt, stars[i].vx);
 		stars[i].vy = _mm512_fmadd_ps(d_vy[i], vec_G_dt, stars[i].vy);
 		stars[i].vz = _mm512_fmadd_ps(d_vz[i], vec_G_dt, stars[i].vz);
+		//vx[i] += d_vx * G * dt;
+		//vy[i] += d_vy * G * dt;
+		//vz[i] += d_vz * G * dt;
 
 		stars[i].px = _mm512_fmadd_ps(stars[i].vx, vec_dt, stars[i].px);
 		stars[i].py = _mm512_fmadd_ps(stars[i].vy, vec_dt, stars[i].py);
@@ -151,8 +153,8 @@ float calc() {
 
 			for (size_t j = 0; j < stars.size(); j++) {
 				auto const& star_j = stars[j];
-				for (size_t m = 0; m < SIMD_WIDTH; m++) {
 
+				for (size_t m = 0; m < SIMD_WIDTH; m++) {
 					if (!(i == j && k == m)) {
 						const float dx = star_j.px.m512_f32[m] - px;
 						const float dy = star_j.py.m512_f32[m] - py;
